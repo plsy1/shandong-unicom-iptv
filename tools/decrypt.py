@@ -1,35 +1,29 @@
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
+from Crypto.Cipher import DES
+from Crypto.Util.Padding import unpad
 
 
 def generate_keys(base_key):
     key = base_key.encode("utf-8")
     if len(key) < 8:
         key = key.ljust(8, b"\0")
-    return key + key + key
+    return key[:8]
 
 
-def decrypt_3des(ciphertext, base_key):
+def decrypt_des(ciphertext, base_key):
     key = generate_keys(base_key)
-
-    cipher = Cipher(algorithms.TripleDES(key), modes.ECB(), backend=default_backend())
-    decryptor = cipher.decryptor()
-
+    cipher = DES.new(key, DES.MODE_ECB)
     try:
-        padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-        unpadder = padding.PKCS7(algorithms.TripleDES.block_size).unpadder()
-        plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+        padded_plaintext = cipher.decrypt(ciphertext)
+        plaintext = unpad(padded_plaintext, DES.block_size)
         return plaintext.decode("utf-8", errors="ignore")
     except ValueError as e:
         print(f"Failed to decrypt with key {base_key}: {e}")
         return None
 
-## 密文
-ciphertext = bytes.fromhex("xxxxxx")
 
-## 密钥
-base_key = "62226000"
+ciphertext = bytes.fromhex("xxxxxxx")
+base_key = "xxxxx"
 
-decrypted_text = decrypt_3des(ciphertext, base_key)
-print(f"Decrypted text: {decrypted_text}")
+decrypted_text = decrypt_des(ciphertext, base_key)
+if decrypted_text:
+    print(f"Decrypted text: {decrypted_text}")

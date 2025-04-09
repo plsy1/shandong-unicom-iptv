@@ -1,12 +1,9 @@
 import requests
-import warnings
 import re
-import json
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
-import random
+from Crypto.Cipher import DES
+from Crypto.Util.Padding import pad
 import binascii
+import random
 
 
 ##########################
@@ -29,16 +26,13 @@ encryptKey = "" ##八位纯数字，穷举获得
 CustomStr = "$CTC"
 
 
-warnings.filterwarnings("ignore")
-
-
-def Entrance():
-    url = f"http://{eas_ip}:{eas_port}/iptvepg/platform/index.jsp?UserID={userID}&Action=Login&Mode=MENU"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return
-    else:
-        print(f"Step1: 请求失败，状态码：{response.status_code}")
+# def Entrance():
+#     url = f"http://{eas_ip}:{eas_port}/iptvepg/platform/index.jsp?UserID={userID}&Action=Login&Mode=MENU"
+#     response = requests.get(url)
+#     if response.status_code == 200:
+#         return
+#     else:
+#         print(f"Entrance: 请求失败，状态码：{response.status_code}")
 
 
 def getEncryptToken():
@@ -65,9 +59,9 @@ def getEncryptToken():
             encryptToken = match.group(1)
             return encryptToken
         else:
-            print("未找到 GetAuthInfo 函数中的值, 请检查网络连接")
+            print("getEncryptToken: 未找到 GetAuthInfo 函数中的值, 请检查网络连接")
     else:
-        print(f"Step2: 请求失败，状态码：{response.status_code}")
+        print(f"getEncryptToken: 请求失败，状态码：{response.status_code}")
 
 
 def generateAuthenticator():
@@ -87,11 +81,11 @@ def generateAuthenticator():
             + "$"
             + CustomStr
         )
-        res = Union3DesEncrypt(strEncry2, encryptKey)
+        res = UnionDesEncrypt(strEncry2, encryptKey)
         return res
 
     except Exception as e:
-        print(f"Step3: {e}")
+        print(f"generateAuthenticator: {e}")
 
 
 def auth(Authenticator):
@@ -121,12 +115,12 @@ def auth(Authenticator):
             if match:
                 user_token = match.group(1)
     else:
-        print("Step4: 鉴权链接获取失败.")
+        print("auth: 鉴权链接获取失败.")
 
     return jsessionid, user_token
 
 
-def authEPG(jsessionid):
+def epgAuth(jsessionid):
     url = f"http://{epgIP}:{epgPort}/iptvepg/function/funcportalauth.jsp"
 
     headers = {"Cookie": f"JSESSIONID={jsessionid}"}
@@ -150,50 +144,25 @@ def authEPG(jsessionid):
         return
 
 
-def getRawInformation(jsessionid):
-    url = f"http://{epgIP}:{epgPort}/iptvepg/function/frameset_builder.jsp"
-
-    headers = {"Cookie": f"JSESSIONID={jsessionid}"}
-
-    data = {
-        "MAIN_WIN_SRC": "/iptvepg/frame205/channel_start.jsp?tempno=-1",
-        "NEED_UPDATE_STB": "1",
-        "BUILD_ACTION": "FRAMESET_BUILDER",
-        "hdmistatus": "undefined",
-    }
-
-    response = requests.post(url, headers=headers, data=data)
-
-    with open("raw.txt", "w", encoding="utf-8") as file:
-        file.write(response.content.decode("gbk"))
-
-
-def Union3DesEncrypt(strMsg, strKey):
+def UnionDesEncrypt(strMsg, strKey):
     try:
-        keyappend = 24 - len(strKey)
+        keyappend = 8 - len(strKey)
         if keyappend > 0:
             strKey = strKey + "0" * keyappend
 
         key_bytes = strKey.encode("utf-8")
-
         msg_bytes = strMsg.encode("utf-8")
 
-        padder = padding.PKCS7(algorithms.TripleDES.block_size).padder()
-        padded_msg = padder.update(msg_bytes) + padder.finalize()
+        padded_msg = pad(msg_bytes, DES.block_size)
 
-        cipher = Cipher(
-            algorithms.TripleDES(key_bytes), modes.ECB(), backend=default_backend()
-        )
-        encryptor = cipher.encryptor()
-        encrypted = encryptor.update(padded_msg) + encryptor.finalize()
+        cipher = DES.new(key_bytes, DES.MODE_ECB)
+        encrypted = cipher.encrypt(padded_msg)
 
         return binascii.hexlify(encrypted).decode("utf-8").upper()
 
     except Exception as e:
-        print(f"加密 Authenticator 时发生错误: {e}")
+        print(f"UnionDesEncrypt: {e}")
 
-
-Entrance()
 
 encryptToken = getEncryptToken()
 
@@ -201,6 +170,7 @@ Authenticator = generateAuthenticator()
 
 jsessionid, user_token = auth(Authenticator)
 
-authEPG(jsessionid)
+epgAuth(jsessionid)
 
-getRawInformation(jsessionid)
+print(f"jsessionid: {jsessionid}")
+print(f"user_token: {user_token}")
